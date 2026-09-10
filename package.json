@@ -1,0 +1,31 @@
+{
+  "name": "my-o-memory",
+  "version": "0.1.0",
+  "description": "Local-first persistent memory plugin for opencode. Markdown source of truth, SQLite FTS5 index, zero cloud.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stoneskin/my-o-memory.git"
+  },
+  "homepage": "https://github.com/stoneskin/my-o-memory#readme",
+  "bugs": {
+    "url": "https://github.com/stoneskin/my-o-memory/issues"
+  },
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "cli": "node --experimental-strip-types src/cli.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.18.30",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
