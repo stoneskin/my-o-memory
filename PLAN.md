@@ -71,6 +71,21 @@ This project runs under Bun and uses bun:sqlite. Do not add better-sqlite3.
   - Seed: normalized git origin URL if present, else absolute cwd path (lowercased)
   - Same repo across machines -> same key, so memories can be `git`-committed (future)
 
+### Scope-key drift and migration
+
+Because the scope key changes when a repo's git origin appears or changes,
+memories captured *before* a remote was added end up orphaned under the
+cwd-based key. The plugin logs a one-shot warning at load when it detects
+this, and ships two CLI commands to resolve it:
+
+- `cli scopes` — list every project scope directory with a file count.
+- `cli migrate --from <old> [--to <current>] [--dry-run] [--on-conflict newer|overwrite|skip]`
+  — rewrites `scope_key` in each file's frontmatter, moves the files, and
+  reindexes. Default conflict strategy is "keep the newer `updated_at`".
+
+Auto-migration on load is intentionally *not* done: two unrelated repos at
+the same cwd would silently merge.
+
 ## Capture mechanisms
 
 MVP:

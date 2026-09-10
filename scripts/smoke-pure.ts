@@ -4,7 +4,7 @@ import { parse, serialize, ulid, type Frontmatter } from "../src/store/markdown.
 import { redact, findSecret } from "../src/redact.ts";
 import { detectKeywords } from "../src/capture/keywords.ts";
 import { DEFAULT_CONFIG } from "../src/config.ts";
-import { resolveProjectScope, USER_SCOPE } from "../src/scope.ts";
+import { resolveProjectScope, resolveCwdScope, USER_SCOPE } from "../src/scope.ts";
 
 let fails = 0;
 function ok(name: string, cond: boolean, info?: unknown) {
@@ -75,6 +75,17 @@ ok("key starts with project__", s.key.startsWith("project__"));
 ok("hash length 12", /__[a-f0-9]{12}$/.test(s.key));
 console.log("     scope.key =", s.key);
 console.log("     user.key  =", USER_SCOPE.key);
+
+console.log("== scope (cwd-only legacy) ==");
+const cwdOnly = resolveCwdScope(process.cwd());
+ok("cwd scope kind=project", cwdOnly.kind === "project");
+ok("cwd scope key format", /^project__[^_]+.*__[a-f0-9]{12}$/.test(cwdOnly.key));
+// Deterministic: same input -> same key
+const cwdOnly2 = resolveCwdScope(process.cwd());
+ok("cwd scope deterministic", cwdOnly.key === cwdOnly2.key);
+// In a repo with a git remote, cwd-only scope must differ from git-origin scope.
+// (This repo does have an origin after `git push`.)
+console.log("     cwd.key   =", cwdOnly.key);
 
 console.log(fails === 0 ? "\nALL PASS" : `\n${fails} FAILURES`);
 process.exit(fails === 0 ? 0 : 1);

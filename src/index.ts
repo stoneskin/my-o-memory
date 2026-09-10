@@ -1,8 +1,9 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { loadConfig } from "./config.ts";
-import { resolveProjectScope, USER_SCOPE, type Scope } from "./scope.ts";
+import { resolveProjectScope, resolveCwdScope, USER_SCOPE, type Scope } from "./scope.ts";
 import { db } from "./store/db.ts";
 import { syncScope, upsertFromFile } from "./store/sync.ts";
+import { scopeHasFiles } from "./store/migrate.ts";
 import {
   writeMemoryFile,
   readMemoryFile,
@@ -26,6 +27,18 @@ const plugin: Plugin = async ({ worktree, directory }) => {
     syncScope(USER_SCOPE.key);
     if (cfg.logLevel === "debug") {
       console.log(`[my-o-memory] loaded. scope=${scope.key}`);
+    }
+    // If a git remote was added *after* memories were first captured, the
+    // scope key changes (cwd-hash -> origin-hash). Detect the legacy dir on
+    // disk and tell the user how to migrate. We do NOT auto-migrate: two
+    // different repos at the same cwd would collide.
+    const cwdScope = resolveCwdScope(roots);
+    if (cwdScope.key !== scope.key && scopeHasFiles(cwdScope.key)) {
+      console.warn(
+        `[my-o-memory] found memories under legacy scope key "${cwdScope.key}". ` +
+          `Current project scope is "${scope.key}". ` +
+          `To move them: npm run cli -- migrate --from ${cwdScope.key}`,
+      );
     }
   } catch (err) {
     console.error("[my-o-memory] init failed:", err);

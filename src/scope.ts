@@ -37,31 +37,40 @@ function sanitize(name: string): string {
   return cleaned.length > 0 ? cleaned : "project";
 }
 
-export function resolveProjectScope(worktree: string): Scope {
-  const target = worktree && worktree.length > 0 ? worktree : ".";
-  const remote = tryGitRemote(target);
-  let seed: string;
-  let projectName: string;
-  if (remote) {
-    const norm = normalizeRemote(remote);
-    seed = norm;
-    const m = norm.match(/\/([^/]+)$/);
-    projectName = m?.[1] ?? "workspace";
-  } else {
-    const resolved = path.resolve(target);
-    seed = resolved.toLowerCase();
-    // basename can return "" on Windows drive roots (e.g. "C:\\"); walk the path
-    // segments and pick the last non-empty, non-drive-letter component.
-    const parts = resolved
-      .split(/[\\/]+/)
-      .filter((p) => p && !/^[A-Za-z]:$/.test(p));
-    projectName = parts[parts.length - 1] ?? path.basename(resolved) ?? "workspace";
-    if (!projectName) projectName = "workspace";
-  }
+function scopeFromSeed(seed: string, projectName: string): Scope {
   const hash = crypto.createHash("sha256").update(seed).digest("hex").slice(0, 12);
   return {
     key: `project__${sanitize(projectName)}__${hash}`,
     kind: "project",
     projectName,
   };
+}
+
+/** Scope keyed purely on the absolute cwd. Never consults git. Used both as
+ *  the fallback for `resolveProjectScope` when no remote is set, and as the
+ *  "legacy" scope detector for migration when a remote is added later. */
+export function resolveCwdScope(worktree: string): Scope {
+  const target = worktree && worktree.length > 0 ? worktree : ".";
+  const resolved = path.resolve(target);
+  const seed = resolved.toLowerCase();
+  // basename can return "" on Windows drive roots (e.g. "C:\\"); walk the path
+  // segments and pick the last non-empty, non-drive-letter component.
+  const parts = resolved
+    .split(/[\\/]+/)
+    .filter((p) => p && !/^[A-Za-z]:$/.test(p));
+  let projectName = parts[parts.length - 1] ?? path.basename(resolved) ?? "workspace";
+  if (!projectName) projectName = "workspace";
+  return scopeFromSeed(seed, projectName);
+}
+
+export function resolveProjectScope(worktree: string): Scope {
+  const target = worktree && worktree.length > 0 ? worktree : ".";
+  const remote = tryGitRemote(target);
+  if (remote) {
+    const norm = normalizeRemote(remote);
+    const m = norm.match(/\/([^/]+)$/);
+    const projectName = m?.[1] ?? "workspace";
+    return scopeFromSeed(norm, projectName);
+  }
+  return resolveCwdScope(target);
 }

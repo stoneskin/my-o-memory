@@ -36,3 +36,10 @@ export function memoriesDirFor(scopeKey: string): string {
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
+
+/** Same as `memoriesDirFor` but never creates the directory. For read-only
+ *  callers (iteration, existence checks) that must not pollute storage. */
+export function memoriesDirPath(scopeKey: string): string {
+  const { memories } = paths();
+  return path.join(memories, scopeKey);
+}

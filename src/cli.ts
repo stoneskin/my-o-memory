@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Run with:  node --experimental-strip-types src/cli.ts <command>
-import { resolveProjectScope, USER_SCOPE } from "./scope.ts";
+import { resolveProjectScope, resolveCwdScope, USER_SCOPE } from "./scope.ts";
 import { db, closeDb } from "./store/db.ts";
 import { syncScope, upsertFromFile, deleteFromIndex } from "./store/sync.ts";
+import { migrateScope, scopeHasFiles, type ConflictStrategy } from "./store/migrate.ts";
 import { search, list } from "./retrieve/search.ts";
 import {
   writeMemoryFile,
@@ -14,6 +15,7 @@ import {
 import { loadConfig } from "./config.ts";
 import { paths } from "./paths.ts";
 import { redact } from "./redact.ts";
+import fs from "node:fs";
 
 function usage(): never {
   console.log(`my-o-memory CLI
@@ -25,8 +27,15 @@ Usage:
   node --experimental-strip-types src/cli.ts add "content" [--scope project|user] [--type T] [--tag t1,t2]
   node --experimental-strip-types src/cli.ts forget <id>
   node --experimental-strip-types src/cli.ts reindex
+  node --experimental-strip-types src/cli.ts scopes
+  node --experimental-strip-types src/cli.ts migrate [--from <key>] [--to <key>]
+                                          [--dry-run] [--on-conflict newer|overwrite|skip]
 
-Scope defaults to \`project\` (derived from cwd's git remote or path).`);
+Scope defaults to \`project\` (derived from cwd's git remote or path).
+\`scopes\` lists every project scope dir with its file count — use it to find
+the \`--from\` key when migrating.
+\`migrate\` moves memories between scope keys — useful when a repo gains a
+git remote after memories were already stored under the cwd-based key.`);
   process.exit(1);
 }
 
@@ -168,6 +177,77 @@ async function main() {
     deleteMemoryFile(row.scope_key, id);
     deleteFromIndex(id);
     console.log(`deleted ${id}`);
+    return;
+  }
+
+  if (cmd === "scopes") {
+    const { memories } = paths();
+    if (!fs.existsSync(memories)) {
+      console.log("(no memories dir yet)");
+      return;
+    }
+    const entries: Array<{ key: string; files: number; marker: string }> = [];
+    for (const name of fs.readdirSync(memories)) {
+      const dir = `${memories}/${name}`;
+      if (!fs.statSync(dir).isDirectory()) continue;
+      const files = fs.readdirSync(dir).filter((f) => f.endsWith(".md")).length;
+      const marker =
+        name === project.key ? " <- current project"
+        : name === USER_SCOPE.key ? " <- user"
+        : "";
+      entries.push({ key: name, files, marker });
+    }
+    entries.sort((a, b) => b.files - a.files);
+    for (const e of entries) {
+      console.log(`  ${e.files.toString().padStart(4)}  ${e.key}${e.marker}`);
+    }
+    return;
+  }
+
+  if (cmd === "migrate") {
+    const flags = parseFlags(rest);
+    const toKey = flags.to ?? project.key;
+
+    let fromKey = flags.from;
+    if (!fromKey) {
+      // Auto-detect: the "legacy" scope is what the key WOULD be if we
+      // ignored the git remote (pure cwd hash). Only offer it if it differs
+      // from the current project scope AND has files on disk.
+      const cwd = resolveCwdScope(process.cwd());
+      if (cwd.key !== project.key && scopeHasFiles(cwd.key)) {
+        fromKey = cwd.key;
+        console.log(`(auto-detected legacy scope: ${fromKey})`);
+      } else {
+        console.error(
+          `no --from given and no legacy cwd-based scope with files detected.\n` +
+            `current project scope: ${project.key}\n` +
+            `cwd-only scope:        ${cwd.key}`,
+        );
+        process.exit(2);
+      }
+    }
+
+    if (fromKey === toKey) {
+      console.error(`--from and --to are identical (${fromKey}); nothing to do.`);
+      process.exit(2);
+    }
+
+    const dryRun = flags["dry-run"] === "true";
+    const onConflict = flags["on-conflict"] as ConflictStrategy | undefined;
+    if (onConflict && !["newer", "overwrite", "skip"].includes(onConflict)) {
+      console.error(`invalid --on-conflict: ${onConflict}`);
+      process.exit(2);
+    }
+
+    const stats = migrateScope(fromKey, toKey, {
+      toProjectName: project.projectName,
+      dryRun,
+      onConflict,
+      logger: (m) => console.log(m),
+    });
+    console.log(
+      `${dryRun ? "DRY RUN: " : ""}moved ${stats.moved}, skipped ${stats.skipped}, conflicts ${stats.conflicts}`,
+    );
     return;
   }
 

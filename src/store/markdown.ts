@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import yaml from "js-yaml";
-import { memoriesDirFor } from "../paths.ts";
+import { memoriesDirFor, memoriesDirPath } from "../paths.ts";
 
 export interface Frontmatter {
   id: string;
@@ -73,7 +73,7 @@ export function writeMemoryFile(
 }
 
 export function deleteMemoryFile(scopeKey: string, id: string): boolean {
-  const dir = memoriesDirFor(scopeKey);
+  const dir = memoriesDirPath(scopeKey);
   const filePath = path.join(dir, `${id}.md`);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
@@ -92,7 +92,7 @@ export function readMemoryFile(filePath: string): MemoryFile | null {
 }
 
 export function* iterMemoryFiles(scopeKey: string): Generator<string> {
-  const dir = memoriesDirFor(scopeKey);
+  const dir = memoriesDirPath(scopeKey);
   if (!fs.existsSync(dir)) return;
   for (const name of fs.readdirSync(dir)) {
     if (name.endsWith(".md")) yield path.join(dir, name);

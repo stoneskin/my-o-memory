@@ -79,9 +79,12 @@ node --experimental-strip-types src/cli.ts search "auth flow"
 node --experimental-strip-types src/cli.ts add "This repo uses better-sqlite3" --type project-config
 node --experimental-strip-types src/cli.ts forget <id>
 node --experimental-strip-types src/cli.ts reindex
+node --experimental-strip-types src/cli.ts scopes
+node --experimental-strip-types src/cli.ts migrate --from <old-scope-key> [--dry-run]
 ```
 
 Or via the npm script: `npm run cli -- list --scope project`.
+**Note:** flag arguments beyond the first must be passed via direct `node` invocation, not `npm run cli --`, because npm swallows unknown `--flag` args.
 
 ## Status
 
